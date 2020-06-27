@@ -1,6 +1,4 @@
 
-#include <dns_sd.h>
-
 class BonjourDnsService : private juce::Thread
 {
 public:

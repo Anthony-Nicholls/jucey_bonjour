@@ -1,21 +1,18 @@
-/*
-  ==============================================================================
-
-    This file was auto-generated!
-
-    It contains the basic startup code for a JUCE application.
-
-  ==============================================================================
-*/
 
 #include <JuceHeader.h>
 
-//==============================================================================
 int main (int argc, char* argv[])
 {
+    juce::UnitTestRunner unitTestRunner;
+    unitTestRunner.runAllTests();
 
-    // ..your code goes here!
+    auto numFailures {0};
 
+    for (auto index {0}; index < unitTestRunner.getNumResults(); ++index)
+    {
+        if (auto result = unitTestRunner.getResult (index))
+            numFailures += result->failures;
+    }
 
-    return 0;
+    return numFailures;
 }
