@@ -13,7 +13,7 @@
         <CONFIGURATION isDebug="0" name="Release"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
-        <MODULEPATH id="juce_core" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="./JUCE/modules"/>
         <MODULEPATH id="jucey_bonjour" path=".."/>
       </MODULEPATHS>
     </XCODE_MAC>
