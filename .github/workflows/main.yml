@@ -16,12 +16,19 @@ jobs:
     strategy:
       matrix:
         juce-branch: [master, develop]
+        configuration: [Debug, Release]
     steps:
       - name: Checkout jucey_bonjour
         uses: actions/checkout@v2
+        
       - name: Checkout JUCE
         uses: actions/checkout@v2
         with:
           repository: juce-framework/JUCE
-          path: tests
           ref: ${{ matrix.juce-branch }}
+
+      - name: Build Projucer
+        uses: sersoft-gmbh/xcodebuild-action@v1
+        with:
+          project: JUCE/extras/Projucer/Builds/MacOSX/Projucer.xcodeproj
+          configuration: ${{ matrix.configuration }}
