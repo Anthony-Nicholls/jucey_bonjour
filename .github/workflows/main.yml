@@ -15,9 +15,9 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        juce-branch: [master, develop]
+        juce-branch: [develop]
         configuration: [Debug, Release]
-        xcode-version: [10.3, 11.0, 11.1, 11.2.1, 11.3.1, 11.4]
+        xcode-version: [10.3, 11.0, 11.1, 11.2.1, 11.3.1, 11.4, 11.4.1, 11.5, 11.6]
     steps:
       - name: Checkout jucey_bonjour
         uses: actions/checkout@v2
@@ -29,7 +29,7 @@ jobs:
           ref: ${{ matrix.juce-branch }}
           path: JUCE
           
-      - name: setup-xcode
+      - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@1.0
         with:
           xcode-version: ${{ matrix.xcode-version }}
