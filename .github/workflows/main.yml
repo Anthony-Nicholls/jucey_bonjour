@@ -52,4 +52,4 @@ jobs:
           action: build
           
       - name: Run Tests
-        run: tests/Builds/MacOSX/${{ matrix.configuration }}/tests
+        run: tests/Builds/MacOSX/build/${{ matrix.configuration }}/tests
