@@ -32,3 +32,4 @@ jobs:
         with:
           project: JUCE/extras/Projucer/Builds/MacOSX/Projucer.xcodeproj
           configuration: ${{ matrix.configuration }}
+          action: build
