@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: "0 0 * * *" # nightly builds
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run unit tests
+        working-directory: ./tests
+        run: ./run_tests_mac.sh
