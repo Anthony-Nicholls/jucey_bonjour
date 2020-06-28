@@ -17,4 +17,6 @@ jobs:
       - uses: actions/checkout@v2
       - name: Run unit tests
         working-directory: ./tests
-        run: ./run_tests_mac.sh
+        run: |
+          sudo xcode-select -switch /Applications/Xcode_11.4.1.app
+          ./run_tests_mac.sh
