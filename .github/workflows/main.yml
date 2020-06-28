@@ -17,6 +17,7 @@ jobs:
       matrix:
         juce-branch: [master, develop]
         configuration: [Debug, Release]
+        xcode-version: [10.3, 11.0, 11.1, 11.2.1, 11.3.1, 11.4]
     steps:
       - name: Checkout jucey_bonjour
         uses: actions/checkout@v2
@@ -27,6 +28,11 @@ jobs:
           repository: juce-framework/JUCE
           ref: ${{ matrix.juce-branch }}
           path: JUCE
+          
+      - name: setup-xcode
+        uses: maxim-lobanov/setup-xcode@1.0
+        with:
+          xcode-version: ${{ matrix.xcode-version }}
 
       - name: Build Projucer
         uses: sersoft-gmbh/xcodebuild-action@v1
