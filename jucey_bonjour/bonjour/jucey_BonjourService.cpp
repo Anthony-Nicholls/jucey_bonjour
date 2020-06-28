@@ -50,35 +50,52 @@ private:
 class BonjourTxtRecord
 {
 public:
-    BonjourTxtRecord (uint16_t txtLen, const unsigned char* txtRecord)
-        : isReadOnly {true}
-        , length {txtLen}
-        , record {(void*) txtRecord}
-
+    BonjourTxtRecord()
     {
-
+        TXTRecordCreate (&ref, 0, nullptr);
     }
 
-    BonjourTxtRecord()
-        : isReadOnly {false}
+    BonjourTxtRecord (const BonjourTxtRecord& other)
+        : BonjourTxtRecord()
     {
-        TXTRecordCreate (&ref, length, record);
+        for (auto index {0}; index < other.getCount(); ++index)
+        {
+            const auto item {other.getItemAtIndex (index)};
+            setValue (item.key, item.value);
+        }
     }
 
     ~BonjourTxtRecord()
     {
-        if ( ! isReadOnly)
-            TXTRecordDeallocate (&ref);
+        TXTRecordDeallocate (&ref);
+    }
+
+    void clear()
+    {
+        TXTRecordDeallocate (&ref);
+        TXTRecordCreate (&ref, 0, nullptr);
+
+    }
+
+    void copyFrom (uint16_t txtLen, const unsigned char* txtRecord)
+    {
+        clear();
+
+        for (auto index {0}; index < getCount (txtLen, txtRecord); ++index)
+        {
+            const auto item {getItemAtIndex (txtLen, txtRecord, index)};
+            setValue (item.key, item.value);
+        }
     }
 
     uint16_t getLength() const
     {
-        return isReadOnly ? length : TXTRecordGetLength (&ref);
+        return TXTRecordGetLength (&ref);
     }
 
     const void* getBytes() const
     {
-        return isReadOnly ? record : TXTRecordGetBytesPtr (&ref);
+        return TXTRecordGetBytesPtr (&ref);
     }
 
     juce::String getValue (const juce::String& key) const
@@ -88,22 +105,9 @@ public:
         return juce::String {(const char*) valueBuffer, valueLength};
     }
 
-    jucey::BonjourService::Item getItemAtIndex (int index) const
+    jucey::BonjourService::RecordItem getItemAtIndex (int index) const
     {
-        const uint16_t maxKeyLength {256};
-        char keyBuffer[maxKeyLength] {};
-        uint8_t valueLength {0};
-        const void* valueBuffer {nullptr};
-
-        TXTRecordGetItemAtIndex (getLength(),
-                                 getBytes(),
-                                 (uint16_t) index,
-                                 maxKeyLength,
-                                 keyBuffer,
-                                 &valueLength,
-                                 &valueBuffer);
-
-        return {keyBuffer, juce::String {(const char*) valueBuffer, valueLength}};
+        return getItemAtIndex (getLength(), getBytes(), index);
     }
 
     bool containsKey (const juce::String& name) const
@@ -113,36 +117,50 @@ public:
 
     int getCount() const
     {
-        return (int) TXTRecordGetCount (getLength(), getBytes());
+        return getCount (getLength(), getBytes());
     }
 
     void setValue (const juce::String& key, const juce::String& value)
     {
-        if (isReadOnly)
-        {
-            jassertfalse;
-            return;
-        }
+        // key names must be a maximum of 9 characters
+        jassert (key.length() < 10);
 
-        TXTRecordSetValue (&ref, key.toRawUTF8(), (uint8_t) value.length(), (const void*) value.toRawUTF8());
+        // values must be a maximum of 255 characters
+        jassert (value.length() < 256);
+
+        TXTRecordSetValue (&ref, key.toRawUTF8(), (uint8_t) value.length(), value.toRawUTF8());
     }
 
     void removeValue (const juce::String& key)
     {
-        if (isReadOnly)
-        {
-            jassertfalse;
-            return;
-        }
-
         TXTRecordRemoveValue (&ref, key.toRawUTF8());
     }
 
 private:
-    const bool isReadOnly {true};
+    static jucey::BonjourService::RecordItem getItemAtIndex (uint16_t txtLen, const void* txtRecord, uint16_t index)
+    {
+        const uint16_t maxKeyLength {256};
+        char keyBuffer[maxKeyLength] {};
+        uint8_t valueLength {0};
+        const void* valueBuffer {nullptr};
+
+        TXTRecordGetItemAtIndex (txtLen,
+                                 txtRecord,
+                                 index,
+                                 maxKeyLength,
+                                 keyBuffer,
+                                 &valueLength,
+                                 &valueBuffer);
+
+        return {keyBuffer, juce::String {(const char*) valueBuffer, valueLength}};
+    }
+
+    static int getCount (uint16_t txtLen, const void* txtRecord)
+    {
+        return (int) TXTRecordGetCount (txtLen, txtRecord);
+    }
+    
     TXTRecordRef ref {};
-    uint16_t length {0};
-    void* record {nullptr};
 };
 
 juce::Result bonjourResult (DNSServiceErrorType errorCode)
@@ -228,7 +246,7 @@ namespace jucey
                 serviceToResolve->pimpl->interfaceIndex = interfaceIndex;
                 serviceToResolve->pimpl->hostName = hosttarget;
                 serviceToResolve->pimpl->broadcastPort = port;
-                serviceToResolve->pimpl->txtRecord = std::make_unique<BonjourTxtRecord>(txtLen, txtRecord);
+                serviceToResolve->pimpl->txtRecord.copyFrom (txtLen, txtRecord);
                 serviceToResolve->pimpl->resolveAsyncCallback (*serviceToResolve,
                                                                bonjourResult (errorCode));
             }
@@ -252,11 +270,26 @@ namespace jucey
             }
         }
 
+        Pimpl()
+        {
+
+        }
+
+        Pimpl (const Pimpl& other)
+            : interfaceIndex {other.interfaceIndex}
+            , hostName {other.hostName}
+            , broadcastPort {other.broadcastPort}
+            , txtRecord {other.txtRecord}
+        {
+
+        }
+
         uint32_t interfaceIndex {0};
         juce::String hostName {};
         uint16_t broadcastPort {0};
-        std::unique_ptr<BonjourTxtRecord> txtRecord {std::make_unique<BonjourTxtRecord>()};
+        BonjourTxtRecord txtRecord {};
 
+        // These should all be unique per instance even when a copy occurs
         DiscoverAsyncCallback discoverAsyncCallback {nullptr};
         ResolveAsyncCallback resolveAsyncCallback {nullptr};
         RegisterAsyncCallback registerAsyncCallback {nullptr};
@@ -281,23 +314,17 @@ namespace jucey
         : name {other.name}
         , type {other.type}
         , domain {other.domain}
-        , pimpl {std::make_unique<BonjourService::Pimpl>()}
+        , pimpl {std::make_unique<BonjourService::Pimpl>(*other.pimpl.get())}
     {
-        pimpl->interfaceIndex = other.pimpl->interfaceIndex;
-        pimpl->hostName = other.pimpl->hostName;
-        pimpl->broadcastPort = other.pimpl->broadcastPort;
+
     }
 
-    BonjourService& BonjourService::operator= (const jucey::BonjourService& other)
+    BonjourService& BonjourService::operator= (const BonjourService& other)
     {
         name = other.name;
         type = other.type;
         domain = other.domain;
-
-        pimpl->dnsService = nullptr;
-        pimpl->interfaceIndex = other.pimpl->interfaceIndex;
-        pimpl->hostName = other.pimpl->hostName;
-        pimpl->broadcastPort = other.pimpl->broadcastPort;
+        pimpl = std::make_unique<BonjourService::Pimpl>(*other.pimpl.get());
 
         return *this;
     }
@@ -334,44 +361,44 @@ namespace jucey
         return domain;
     }
 
-    juce::var BonjourService::getProperty (const juce::String& name, const juce::var& defaultReturnValue) const
+    juce::var BonjourService::getRecordItemValue (const juce::String& key, const juce::var& defaultReturnValue) const
     {
-        if ( ! containsProperty (name))
+        if ( ! containsRecordItem (key))
             return defaultReturnValue;
         
-        return pimpl->txtRecord->getValue (name);
+        return pimpl->txtRecord.getValue (key);
     }
 
-    BonjourService::Item BonjourService::getItemAtIndex (int index) const
+    BonjourService::RecordItem BonjourService::getRecordItemAtIndex (int index) const
     {
-        if (index >= getNumProperties())
+        if (index >= getNumRecordItems())
         {
             jassertfalse;
             return {};
         }
 
-        return pimpl->txtRecord->getItemAtIndex (index);
+        return pimpl->txtRecord.getItemAtIndex (index);
     }
 
-    void BonjourService::setProperty (const juce::String& name,
-                                      const juce::var& newValue)
+    void BonjourService::setRecordItemValue (const juce::String& key,
+                                             const juce::var& newValue)
     {
-        pimpl->txtRecord->setValue (name, newValue);
+        pimpl->txtRecord.setValue (key, newValue);
     }
 
-    void BonjourService::removeProperty (const juce::String& name)
+    void BonjourService::removeRecordItem (const juce::String& key)
     {
-        pimpl->txtRecord->removeValue (name);
+        pimpl->txtRecord.removeValue (key);
     }
 
-    bool BonjourService::containsProperty (const juce::String& name) const
+    bool BonjourService::containsRecordItem (const juce::String& key) const
     {
-        return pimpl->txtRecord->containsKey (name);
+        return pimpl->txtRecord.containsKey (key);
     }
 
-    int BonjourService::getNumProperties() const
+    int BonjourService::getNumRecordItems() const
     {
-        return pimpl->txtRecord->getCount();
+        return pimpl->txtRecord.getCount();
     }
 
     bool BonjourService::isUdp() const
@@ -451,8 +478,8 @@ namespace jucey
                                                               domain.isEmpty() ? nullptr : domain.toUTF8(),
                                                               nullptr,
                                                               isUdp() ? udpSocket.getBoundPort() : tcpSocket.getBoundPort(),
-                                                              pimpl->txtRecord->getLength(),
-                                                              pimpl->txtRecord->getBytes(),
+                                                              pimpl->txtRecord.getLength(),
+                                                              pimpl->txtRecord.getBytes(),
                                                               &Pimpl::registerReply,
                                                               this))};
 
@@ -502,7 +529,9 @@ namespace jucey
         jassert (pimpl->hostName.isNotEmpty() && pimpl->broadcastPort > 0);
 
         if (isUdp())
+        {
             return udpSocket.write (pimpl->hostName, pimpl->broadcastPort, sourceBuffer, numBytesToWrite);
+        }
 
         if (isTcp())
         {
@@ -514,24 +543,24 @@ namespace jucey
         return -1;
     }
 
-    BonjourService::Item::Item (const juce::String& key,
-                                const juce::String& value)
+    BonjourService::RecordItem::RecordItem (const juce::String& key,
+                                            const juce::String& value)
         : key {key}
         , value {value}
     {
 
     }
 
-    bool BonjourService::Item::operator== (const Item& other)
+    bool BonjourService::RecordItem::operator== (const RecordItem& other) const
     {
         return key == other.key
             && value == other.value;
     }
     
-    bool BonjourService::Item::operator!= (const Item& other)
+    bool BonjourService::RecordItem::operator!= (const RecordItem& other) const
     {
         return key != other.key
-            && value != other.value;
+            || value != other.value;
     }
 }
 

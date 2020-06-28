@@ -18,7 +18,7 @@ public:
 private:
     void runBonjourNetworkTests (const juce::String& type)
     {
-        beginTest ("Bonjour Network Test: " + type);
+        beginTest ("Network Test: " + type);
 
         jucey::BonjourService serviceToRegister {type};
         serviceToRegister.withName ("JUCEY Bonjour Service Test");
@@ -61,8 +61,8 @@ private:
         };
 
         // add some propperties before registering the service
-        serviceToRegister.setProperty ("keyA", "valueA");
-        serviceToRegister.setProperty ("keyB", "valueB");
+        serviceToRegister.setRecordItemValue ("keyA", "valueA");
+        serviceToRegister.setRecordItemValue ("keyB", "valueB");
 
         // register the service
         serviceToRegister.registerAsync (serviceRegistered);
@@ -73,16 +73,16 @@ private:
         expect (serviceDiscoveredEvent.wait (1000));
 
         // the discovered service shouldn't have any properties yet
-        expect (serviceToDiscover.getNumProperties() == 0);
+        expect (serviceToDiscover.getNumRecordItems() == 0);
 
         // resolve the discovered service
         serviceToResolve.resolveAsync (serviceResolved);
         expect (serviceResolvedEvent.wait (1000));
 
         // check that the resolved service has the correct properties
-        expect (serviceToResolve.getNumProperties() == 2);
-        expect (serviceToResolve.getProperty ("keyA") == "valueA");
-        expect (serviceToResolve.getProperty ("keyB") == "valueB");
+        expect (serviceToResolve.getNumRecordItems() == 2);
+        expect (serviceToResolve.getRecordItemValue ("keyA") == "valueA");
+        expect (serviceToResolve.getRecordItemValue ("keyB") == "valueB");
 
         // send random data using the resolved service
         const auto dataSent {juce::Uuid().toString()};
@@ -96,10 +96,100 @@ private:
         expect (dataRecieved.toString() == dataSent);
     }
 
+    void runDefaultConstructorTests()
+    {
+        beginTest ("Default Constructor");
+        jucey::BonjourService service;
+        expect (service.getType().isEmpty());
+        expect (service.getName().isEmpty());
+        expect (service.getDomain().isEmpty());
+        expect (service.isUdp() == false);
+        expect (service.isTcp() == false);
+        expect (service.getNumRecordItems() == 0);
+    }
+
+    void runUdpConstructorTests()
+    {
+        beginTest ("UDP Constructor");
+        jucey::BonjourService service {"_type._udp"};
+        expect (service.getType() == "_type._udp");
+        expect (service.getName().isEmpty());
+        expect (service.getDomain().isEmpty());
+        expect (service.isUdp() == true);
+        expect (service.isTcp() == false);
+        expect (service.getNumRecordItems() == 0);
+    }
+
+    void runTcpConstructorTests()
+    {
+        beginTest ("TCP Constructor");
+        jucey::BonjourService service {"_type._tcp"};
+        expect (service.getType() == "_type._tcp");
+        expect (service.getName().isEmpty());
+        expect (service.getDomain().isEmpty());
+        expect (service.isUdp() == false);
+        expect (service.isTcp() == true);
+        expect (service.getNumRecordItems() == 0);
+    }
+
+    void runCopyConstructorTests()
+    {
+        beginTest ("Copy Constructor");
+        jucey::BonjourService originalService {"_type._tcp"};
+        originalService.withName ("name");
+        originalService.withDomain ("domain");
+        originalService.setRecordItemValue ("keyA", "valueA");
+        originalService.setRecordItemValue ("keyB", "valueB");
+
+        jucey::BonjourService copiedService {originalService};
+        expect (copiedService.getType() == originalService.getType());
+        expect (copiedService.getName() == originalService.getName());
+        expect (copiedService.getDomain() == originalService.getDomain());
+        expect (copiedService.isUdp() == originalService.isUdp());
+        expect (copiedService.isTcp() == originalService.isTcp());
+        expect (copiedService.getNumRecordItems() == originalService.getNumRecordItems());
+        expect (copiedService.getRecordItemAtIndex (0) == originalService.getRecordItemAtIndex (0));
+        expect (copiedService.getRecordItemAtIndex (1) == originalService.getRecordItemAtIndex (1));
+    }
+
+    void runRecordItemTests()
+    {
+        beginTest ("Record Items");
+
+        jucey::BonjourService service;
+        service.setRecordItemValue ("keyA", "valueA");
+        service.setRecordItemValue ("keyB", "valueB");
+        service.setRecordItemValue ("keyC", "valueC");
+
+        expect (service.getNumRecordItems() == 3);
+        expect (service.containsRecordItem ("keyA") == true);
+        expect (service.containsRecordItem ("keyB") == true);
+        expect (service.containsRecordItem ("keyC") == true);
+        expect (service.containsRecordItem ("keyD") == false);
+
+        service.removeRecordItem ("keyB");
+
+        expect (service.getNumRecordItems() == 2);
+        expect (service.containsRecordItem ("keyA") == true);
+        expect (service.containsRecordItem ("keyB") == false);
+        expect (service.containsRecordItem ("keyC") == true);
+        expect (service.containsRecordItem ("keyD") == false);
+    }
+
     void runTest() override
     {
-        runBonjourNetworkTests ("_" + juce::Uuid().toString() + "._udp");
-        runBonjourNetworkTests ("_" + juce::Uuid().toString() + "._tcp");
+        runDefaultConstructorTests();
+        runUdpConstructorTests();
+        runTcpConstructorTests();
+        runCopyConstructorTests();
+        runRecordItemTests();
+
+        // TODO: Re-enable these tests
+        // These tests are being skipped as they currently require UI
+        // interaction on macOS
+
+        // runBonjourNetworkTests ("_test._udp");
+        // runBonjourNetworkTests ("_test._tcp");
     }
 };
 

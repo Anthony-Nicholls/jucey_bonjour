@@ -18,30 +18,30 @@ namespace jucey
         juce::String getType() const;
         juce::String getDomain() const;
 
-        struct Item
+        struct RecordItem
         {
-            Item() = default;
+            RecordItem() = default;
             
-            Item (const juce::String& key,
-                  const juce::String& value);
+            RecordItem (const juce::String& key,
+                        const juce::String& value);
 
-            bool operator== (const Item& other);
-            bool operator!= (const Item& other);
+            bool operator== (const RecordItem& other) const;
+            bool operator!= (const RecordItem& other) const;
 
             const juce::String key;
             const juce::String value;
-
-            JUCE_LEAK_DETECTOR (Item)
+            
+            JUCE_LEAK_DETECTOR (RecordItem)
         };
 
-        juce::var getProperty (const juce::String& name, const juce::var& defaultReturnValue = {}) const;
-        Item getItemAtIndex (int index) const;
+        juce::var getRecordItemValue (const juce::String& key, const juce::var& defaultReturnValue = {}) const;
+        RecordItem getRecordItemAtIndex (int index) const;
         
-        void setProperty (const juce::String& name, const juce::var& newValue);
-        void removeProperty (const juce::String& name);
+        void setRecordItemValue (const juce::String& key, const juce::var& newValue);
+        void removeRecordItem (const juce::String& key);
 
-        bool containsProperty (const juce::String& name) const;
-        int getNumProperties() const;
+        bool containsRecordItem (const juce::String& key) const;
+        int getNumRecordItems() const;
 
         bool isUdp() const;
         bool isTcp() const;
@@ -62,8 +62,6 @@ namespace jucey
         int write (const void* sourceBuffer, int numBytesToWrite);
 
         BonjourService& operator= (const BonjourService& other);
-        bool operator== (const BonjourService& other) const;
-        bool operator!= (const BonjourService& other) const;
 
     private:
         juce::String name {};
