@@ -15,11 +15,11 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        xcode-version: [10.3, 11, 11.1, 11.2.1, 11.3.1, 11.4]
+        xcode-version: [10.3] #[10.3, 11, 11.1, 11.2.1, 11.3.1, 11.4]
     steps:
-      - uses: actions/checkout@v2
-      - name: Run unit tests
-        working-directory: ./tests
-        run: |
-          sudo xcode-select -switch /Applications/Xcode_${{ matrix.xcode-version }}.app
-          ./run_tests_mac.sh
+      - name: Checkout jucey_bonjour
+        uses: actions/checkout@v2
+      - name: Checkout JUCE
+        uses: actions/checkout@v2
+        with:
+          repository: "https://github.com/juce-framework/JUCE.git"
