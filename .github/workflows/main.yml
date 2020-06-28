@@ -18,5 +18,5 @@ jobs:
       - name: Run unit tests
         working-directory: ./tests
         run: |
-          sudo xcode-select -switch /Applications/Xcode_11.4.1.app
+          sudo xcode-select -switch /Applications/Xcode_11.4.app
           ./run_tests_mac.sh
