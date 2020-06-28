@@ -16,8 +16,8 @@ jobs:
     strategy:
       matrix:
         juce-branch: [develop]
-        configuration: [Debug, Release]
-        xcode-version: [10.3, 11.0, 11.1, 11.2.1, 11.3.1, 11.4, 11.4.1, 11.5, 11.6]
+        configuration: [Release]
+        xcode-version: [latest]
     steps:
       - name: Checkout jucey_bonjour
         uses: actions/checkout@v2
@@ -27,7 +27,7 @@ jobs:
         with:
           repository: juce-framework/JUCE
           ref: ${{ matrix.juce-branch }}
-          path: JUCE
+          path: tests/JUCE
           
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@1.0
@@ -37,6 +37,19 @@ jobs:
       - name: Build Projucer
         uses: sersoft-gmbh/xcodebuild-action@v1
         with:
-          project: JUCE/extras/Projucer/Builds/MacOSX/Projucer.xcodeproj
+          project: tests/JUCE/extras/Projucer/Builds/MacOSX/Projucer.xcodeproj
           configuration: ${{ matrix.configuration }}
           action: build
+      
+      - name: Generate Tests Project
+        run: tests/JUCE/extras/Projucer/Builds/MacOSX/build/${{ matrix.configuration }}/Projucer.app/Contents/MacOS/Projucer --resave tests/tests.jucer
+
+      - name: Build Tests
+        uses: sersoft-gmbh/xcodebuild-action@v1
+        with:
+          project: tests/Builds/MacOSX/tests.xcodeproj
+          configuration: ${{ matrix.configuration }}
+          action: build
+          
+      - name: Run Tests
+        run: tests/Builds/MacOSX/${{ matrix.configuration }}/tests
