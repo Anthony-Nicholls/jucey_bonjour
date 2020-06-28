@@ -15,11 +15,13 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        xcode-version: [10.3] #[10.3, 11, 11.1, 11.2.1, 11.3.1, 11.4]
+        juce-branch: [master, develop]
     steps:
       - name: Checkout jucey_bonjour
         uses: actions/checkout@v2
       - name: Checkout JUCE
         uses: actions/checkout@v2
         with:
-          repository: "https://github.com/juce-framework/JUCE.git"
+          repository: juce-framework/JUCE
+          path: tests
+          ref: ${{ matrix.juce-branch }}
