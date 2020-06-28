@@ -26,6 +26,7 @@ jobs:
         with:
           repository: juce-framework/JUCE
           ref: ${{ matrix.juce-branch }}
+          path: JUCE
 
       - name: Build Projucer
         uses: sersoft-gmbh/xcodebuild-action@v1
