@@ -53,6 +53,8 @@ namespace jucey
         juce::Result discoverAsync (DiscoverAsyncCallback callback, int interfaceIndex = 0);
         juce::Result resolveAsync (ResolveAsyncCallback callback);
         juce::Result registerAsync (RegisterAsyncCallback callback, int portToRegisterServiceOn);
+        juce::Result registerAsync (RegisterAsyncCallback callback, const juce::DatagramSocket& socketToRegisterServiceOn);
+        juce::Result registerAsync (RegisterAsyncCallback callback, const juce::StreamingSocket& socketToRegisterServiceOn);
 
         BonjourService& operator= (const BonjourService& other);
 

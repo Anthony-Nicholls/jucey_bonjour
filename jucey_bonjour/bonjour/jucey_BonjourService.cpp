@@ -285,6 +285,7 @@ namespace jucey
 
         void startDnsService (DNSServiceRef ref)
         {
+            // You can't start the DNS Service if the reference is invalid!
             jassert (ref != nullptr);
             dnsService = std::make_unique<BonjourDnsService>(ref);
         }
@@ -315,7 +316,10 @@ namespace jucey
         : type {type}
         , pimpl {std::make_unique<BonjourService::Pimpl>()}
     {
+        // bonjour services must always start with an underscore ("_")
         jassert (type.startsWith ("_"));
+
+        // bonjour services must always end with "._udp" or "._tcp"
         jassert (isUdp() || isTcp());
     }
 
@@ -382,6 +386,8 @@ namespace jucey
     {
         if (index >= getNumRecordItems())
         {
+            // Trying to access a non-existant record item, check
+            // `getNumRecordItems()` before calling this function
             jassertfalse;
             return {};
         }
@@ -459,9 +465,11 @@ namespace jucey
         return result;
     }
 
-    juce::Result BonjourService::registerAsync (jucey::BonjourService::RegisterAsyncCallback callback, int portToRegisterServiceOn)
+    juce::Result BonjourService::registerAsync (jucey::BonjourService::RegisterAsyncCallback callback,
+                                                int portToRegisterServiceOn)
     {
         // A socket should be bound to a valid port *before* calling register
+        // and the bound port should be passed to this method
         jassert (portToRegisterServiceOn > 0 && portToRegisterServiceOn < 65536);
 
         DNSServiceRef ref {nullptr};
@@ -484,6 +492,24 @@ namespace jucey
             pimpl->startDnsService (ref);
 
         return result;
+    }
+
+    juce::Result BonjourService::registerAsync (jucey::BonjourService::RegisterAsyncCallback callback,
+                                                const juce::DatagramSocket& socketToRegisterServiceOn)
+    {
+        // It doesn't make sense to call this method with a UDP socket, if the
+        // service to be registered isn't a UDP service!
+        jassert (isUdp());
+        return registerAsync (callback, socketToRegisterServiceOn.getBoundPort());
+    }
+
+    juce::Result BonjourService::registerAsync (jucey::BonjourService::RegisterAsyncCallback callback,
+                                                const juce::StreamingSocket& socketToRegisterServiceOn)
+    {
+        // It doesn't make sense to call this method with a TCP socket, if the
+        // service to be registered isn't a TCP service!
+        jassert (isTcp());
+        return registerAsync (callback, socketToRegisterServiceOn.getBoundPort());
     }
 
     BonjourService::RecordItem::RecordItem (const juce::String& key,
