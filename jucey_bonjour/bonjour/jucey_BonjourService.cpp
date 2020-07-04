@@ -56,8 +56,9 @@ public:
     }
 
     BonjourTxtRecord (const BonjourTxtRecord& other)
-        : BonjourTxtRecord()
     {
+        TXTRecordCreate (&ref, 0, nullptr);
+
         for (auto index {0}; index < other.getCount(); ++index)
         {
             const auto item {other.getItemAtIndex (index)};
@@ -244,10 +245,10 @@ namespace jucey
             {
                 serviceToResolve->pimpl->dnsService->stop();
                 serviceToResolve->pimpl->interfaceIndex = interfaceIndex;
-                serviceToResolve->pimpl->hostName = hosttarget;
-                serviceToResolve->pimpl->broadcastPort = port;
                 serviceToResolve->pimpl->txtRecord.copyFrom (txtLen, txtRecord);
                 serviceToResolve->pimpl->resolveAsyncCallback (*serviceToResolve,
+                                                               hosttarget,
+                                                               port,
                                                                bonjourResult (errorCode));
             }
         }
@@ -265,8 +266,8 @@ namespace jucey
                 serviceToRegister->name = name;
                 serviceToRegister->type = regtype;
                 serviceToRegister->domain = domain;
-                serviceToRegister->pimpl->resolveAsyncCallback (*serviceToRegister,
-                                                                bonjourResult (errorCode));
+                serviceToRegister->pimpl->registerAsyncCallback (*serviceToRegister,
+                                                                 bonjourResult (errorCode));
             }
         }
 
@@ -277,16 +278,24 @@ namespace jucey
 
         Pimpl (const Pimpl& other)
             : interfaceIndex {other.interfaceIndex}
-            , hostName {other.hostName}
-            , broadcastPort {other.broadcastPort}
             , txtRecord {other.txtRecord}
         {
 
         }
 
+        void startDnsService (DNSServiceRef ref)
+        {
+            jassert (ref != nullptr);
+            dnsService = std::make_unique<BonjourDnsService>(ref);
+        }
+
+        void stopDnsService()
+        {
+            if (dnsService != nullptr)
+                dnsService->stop();
+        }
+
         uint32_t interfaceIndex {0};
-        juce::String hostName {};
-        uint16_t broadcastPort {0};
         BonjourTxtRecord txtRecord {};
 
         // These should all be unique per instance even when a copy occurs
@@ -411,7 +420,7 @@ namespace jucey
         return type.contains ("._tcp");
     }
 
-    void BonjourService::discoverAsync (BonjourService::DiscoverAsyncCallback callback, int interfaceIndex)
+    juce::Result BonjourService::discoverAsync (BonjourService::DiscoverAsyncCallback callback, int interfaceIndex)
     {
         DNSServiceRef ref {nullptr};
         pimpl->discoverAsyncCallback = callback;
@@ -425,16 +434,12 @@ namespace jucey
                                                             this))};
 
         if (result.ok())
-        {
-            pimpl->dnsService = std::make_unique<BonjourDnsService>(ref);
-            return;
-        }
+            pimpl->startDnsService (ref);
 
-        callback (*this, false, false, result);
-        pimpl->dnsService = nullptr;
+        return result;
     }
 
-    void BonjourService::resolveAsync (jucey::BonjourService::ResolveAsyncCallback callback)
+    juce::Result BonjourService::resolveAsync (jucey::BonjourService::ResolveAsyncCallback callback)
     {
         DNSServiceRef ref {nullptr};
         pimpl->resolveAsyncCallback = callback;
@@ -449,26 +454,18 @@ namespace jucey
                                                              this))};
 
         if (result.ok())
-        {
-            pimpl->dnsService = std::make_unique<BonjourDnsService>(ref);
-            return;
-        }
+            pimpl->startDnsService (ref);
 
-        callback (*this, result);
+        return result;
     }
 
-    void BonjourService::registerAsync (jucey::BonjourService::RegisterAsyncCallback callback, int port)
+    juce::Result BonjourService::registerAsync (jucey::BonjourService::RegisterAsyncCallback callback, int portToRegisterServiceOn)
     {
-        const auto isBound {isUdp() ? udpSocket.bindToPort (port) : tcpSocket.createListener (port)};
-
-        if ( ! isBound)
-        {
-            callback (*this, juce::Result::fail ("bonjour error: Failed to bind to port " + juce::String (port)));
-            return;
-        }
+        // A socket should be bound to a valid port *before* calling register
+        jassert (portToRegisterServiceOn > 0 && portToRegisterServiceOn < 65536);
 
         DNSServiceRef ref {nullptr};
-        pimpl->resolveAsyncCallback = callback;
+        pimpl->registerAsyncCallback = callback;
 
         const auto result {bonjourResult (DNSServiceRegister (&ref,
                                                               0,
@@ -477,70 +474,16 @@ namespace jucey
                                                               type.toUTF8(),
                                                               domain.isEmpty() ? nullptr : domain.toUTF8(),
                                                               nullptr,
-                                                              isUdp() ? udpSocket.getBoundPort() : tcpSocket.getBoundPort(),
+                                                              portToRegisterServiceOn,
                                                               pimpl->txtRecord.getLength(),
                                                               pimpl->txtRecord.getBytes(),
                                                               &Pimpl::registerReply,
                                                               this))};
 
         if (result.ok())
-        {
-            pimpl->dnsService = std::make_unique<BonjourDnsService>(ref);
-            return;
-        }
+            pimpl->startDnsService (ref);
 
-        callback (*this, result);
-    }
-
-    int BonjourService::waitUntilReady (bool readyForReading,
-                                        int timeoutMsecs)
-    {
-        if (isUdp())
-            return udpSocket.waitUntilReady (readyForReading, timeoutMsecs);
-
-        if (isTcp())
-            return tcpSocket.waitUntilReady (readyForReading, timeoutMsecs);
-
-        jassertfalse;
-        return -1;
-    }
-
-    int BonjourService::read (void* destBuffer,
-                              int maxBytesToRead,
-                              bool blockUntilSpecifiedAmountHasArrived)
-    {
-        if (isUdp())
-            return udpSocket.read (destBuffer, maxBytesToRead, blockUntilSpecifiedAmountHasArrived);
-
-        if (isTcp())
-        {
-            if (auto tcpConnection = std::unique_ptr<juce::StreamingSocket> (tcpSocket.waitForNextConnection()))
-                return tcpConnection->read (destBuffer, maxBytesToRead, blockUntilSpecifiedAmountHasArrived);
-        }
-
-        jassertfalse;
-        return -1;
-    }
-
-    int BonjourService::write (const void* sourceBuffer,
-                               int numBytesToWrite)
-    {
-        // The service must be resolved before sending data to it
-        jassert (pimpl->hostName.isNotEmpty() && pimpl->broadcastPort > 0);
-
-        if (isUdp())
-        {
-            return udpSocket.write (pimpl->hostName, pimpl->broadcastPort, sourceBuffer, numBytesToWrite);
-        }
-
-        if (isTcp())
-        {
-            if (tcpSocket.isConnected() || tcpSocket.connect (pimpl->hostName, pimpl->broadcastPort))
-                return tcpSocket.write (sourceBuffer, numBytesToWrite);
-        }
-
-        jassertfalse;
-        return -1;
+        return result;
     }
 
     BonjourService::RecordItem::RecordItem (const juce::String& key,

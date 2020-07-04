@@ -47,19 +47,12 @@ namespace jucey
         bool isTcp() const;
 
         using DiscoverAsyncCallback = std::function<void(const BonjourService& service, bool isAvailable, bool isMoreComing, const juce::Result& result)>;
-        using ResolveAsyncCallback = std::function<void(const BonjourService& service, const juce::Result& result)>;
+        using ResolveAsyncCallback = std::function<void(const BonjourService& service, const juce::String& hostName, int port, const juce::Result& result)>;
         using RegisterAsyncCallback = std::function<void(const BonjourService& service, const juce::Result& result)>;
 
-        void discoverAsync (DiscoverAsyncCallback callback, int interfaceIndex = 0);
-        void resolveAsync (ResolveAsyncCallback callback);
-        void registerAsync (RegisterAsyncCallback callback, int port = 0);
-
-        int waitUntilReady (bool readyForReading, int timeoutMsecs);
-
-        int read (void* destBuffer, int maxBytesToRead,
-                  bool blockUntilSpecifiedAmountHasArrived);
-
-        int write (const void* sourceBuffer, int numBytesToWrite);
+        juce::Result discoverAsync (DiscoverAsyncCallback callback, int interfaceIndex = 0);
+        juce::Result resolveAsync (ResolveAsyncCallback callback);
+        juce::Result registerAsync (RegisterAsyncCallback callback, int portToRegisterServiceOn);
 
         BonjourService& operator= (const BonjourService& other);
 
@@ -67,9 +60,6 @@ namespace jucey
         juce::String name {};
         juce::String type {};
         juce::String domain {};
-
-        juce::DatagramSocket udpSocket;
-        juce::StreamingSocket tcpSocket;
         
         class Pimpl;
         std::unique_ptr<Pimpl> pimpl;
