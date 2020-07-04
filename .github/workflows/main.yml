@@ -58,4 +58,4 @@ jobs:
           sudo /usr/libexec/ApplicationFirewall/socketfilterfw -k
           
       - name: Run Tests
-        run: tests/Builds/MacOSX/build/${{ matrix.configuration }}/test
+        run: tests/Builds/MacOSX/build/${{ matrix.configuration }}/tests
