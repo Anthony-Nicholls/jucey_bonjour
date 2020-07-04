@@ -1,86 +1,6 @@
 
 #if JUCEY_UNIT_TESTS
 
-template<typename SocketType>
-bool enableListeningOnSocket (SocketType& socket);
-
-template<>
-bool enableListeningOnSocket (juce::DatagramSocket& socket)
-{
-    return socket.bindToPort (0);
-}
-
-template<>
-bool enableListeningOnSocket (juce::StreamingSocket& socket)
-{
-    return socket.createListener (0);
-}
-
-template <typename SocketType>
-bool sendStringToRemoteSocket (const juce::String& stringToSend,
-                               const juce::String& targetHostName,
-                               int targetPort);
-
-template<>
-bool sendStringToRemoteSocket<juce::DatagramSocket> (const juce::String& stringToSend,
-                                                     const juce::String& targetHostName,
-                                                     int targetPort)
-{
-    juce::DatagramSocket socket;
-
-    if (socket.bindToPort (0))
-    {
-        const auto numBytes {(int) stringToSend.getNumBytesAsUTF8()};
-        return socket.write (targetHostName, targetPort, stringToSend.toRawUTF8(), numBytes) == numBytes;
-    }
-
-    return false;
-}
-
-template<>
-bool sendStringToRemoteSocket<juce::StreamingSocket> (const juce::String& stringToSend,
-                                                      const juce::String& targetHostName,
-                                                      int targetPort)
-{
-    juce::StreamingSocket socket;
-
-    if (socket.connect (targetHostName, targetPort))
-    {
-        const auto numBytes {(int) stringToSend.getNumBytesAsUTF8()};
-        return socket.write (stringToSend.toRawUTF8(), numBytes) == numBytes;
-    }
-
-    return false;
-}
-
-template <typename SocketType>
-bool expectStringOnSocket (SocketType& socket, const juce::String& stringToExpect);
-
-template<>
-bool expectStringOnSocket (juce::DatagramSocket& socket, const juce::String& stringToExpect)
-{
-    juce::MemoryBlock data {stringToExpect.getNumBytesAsUTF8(), true};
-
-    if (socket.read (data.getData(), (int) data.getSize(), true) == (int) data.getSize())
-        return data.toString() == stringToExpect;
-
-    return false;
-}
-
-template<>
-bool expectStringOnSocket (juce::StreamingSocket& socket, const juce::String& stringToExpect)
-{
-    if (const auto listenerSocket = std::unique_ptr<juce::StreamingSocket>(socket.waitForNextConnection()))
-    {
-        juce::MemoryBlock data {stringToExpect.getNumBytesAsUTF8(), true};
-
-        if (listenerSocket->read (data.getData(), (int) data.getSize(), true) == (int) data.getSize())
-            return data.toString() == stringToExpect;
-    }
-
-    return false;
-}
-
 class BonjourServiceTests : private juce::UnitTest
 {
 public:
@@ -99,12 +19,16 @@ private:
     jucey::BonjourService runServiceRegistrationTests (jucey::BonjourService& serviceToRegister,
                                                        int portToRegisterServiceOn)
     {
+        beginTest ("Register: " + serviceToRegister.getType());
+
         jucey::BonjourService registeredService;
         juce::WaitableEvent onServiceRegisteredEvent;
 
         const auto onServiceRegistered = [&](const jucey::BonjourService& service,
                                              const juce::Result& result)
         {
+            beginTest ("Registered: " + serviceToRegister.getType());
+
             expect (result.wasOk());
             expect (service.getName() == serviceToRegister.getName());
             expect (service.getType() == serviceToRegister.getType());
@@ -126,6 +50,8 @@ private:
 
     jucey::BonjourService runServiceDiscoveryTests (const jucey::BonjourService& expectedService)
     {
+        beginTest ("Discover: " + expectedService.getType());
+
         jucey::BonjourService serviceToDiscover {expectedService};
         jucey::BonjourService discoveredService;
         juce::WaitableEvent onServiceDiscoveredEvent;
@@ -135,6 +61,8 @@ private:
                                              bool isMoreComing,
                                              const juce::Result& result)
         {
+            beginTest ("Discovered: " + expectedService.getType());
+
             expect (result.wasOk());
             expect (isAvailable);
             expect (service.getType() == expectedService.getType());
@@ -161,9 +89,10 @@ private:
     }
 
     void runServiceResolutionTests (const jucey::BonjourService& serviceToResolve,
-                                    juce::String& targetHostName,
-                                    int& targetPort)
+                                    int expectedPort)
     {
+        beginTest ("Resolve: " + serviceToResolve.getType());
+
         jucey::BonjourService resolvedService;
         juce::WaitableEvent onServiceResolvedEvent;
 
@@ -172,6 +101,8 @@ private:
                                            int port,
                                            const juce::Result& result)
         {
+            beginTest ("Resolved: " + serviceToResolve.getType());
+
             expect (result.wasOk());
             expect (result.wasOk());
             expect (service.getName() == serviceToResolve.getName());
@@ -181,8 +112,7 @@ private:
             for (auto index {0}; index < serviceToResolve.getNumRecordItems(); ++index)
                 expect (service.getRecordItemAtIndex (index) == serviceToResolve.getRecordItemAtIndex (index));
 
-            targetHostName = hostName;
-            targetPort = port;
+            expect (port == expectedPort);
             onServiceResolvedEvent.signal();
         };
 
@@ -191,37 +121,19 @@ private:
         expect (onServiceResolvedEvent.wait (1000));
     }
 
-    template <typename SocketType>
     void runBonjourNetworkTests (const juce::String& serviceTypeToTest)
     {
-        beginTest ("Network Test: " + serviceTypeToTest);
-
-        SocketType localSocket;
-        expect (enableListeningOnSocket (localSocket));
-
         jucey::BonjourService serviceToRegister {serviceTypeToTest};
         serviceToRegister.withName ("JUCEY Test Service");
         serviceToRegister.withDomain ("local");
         serviceToRegister.setRecordItemValue ("keyA", "valueA");
         serviceToRegister.setRecordItemValue ("keyB", "valueB");
 
-        const auto registeredService (runServiceRegistrationTests (serviceToRegister, localSocket.getBoundPort()));
+        const auto portToRegister {getRandom().nextInt ({1, std::numeric_limits<uint16_t>::max()})};
+
+        const auto registeredService (runServiceRegistrationTests (serviceToRegister, portToRegister));
         const auto discoveredService (runServiceDiscoveryTests (registeredService));
-
-        juce::String targetHostName {};
-        int targetPort {-1};
-        runServiceResolutionTests (discoveredService, targetHostName, targetPort);
-        expect (localSocket.getBoundPort() == targetPort);
-
-        // send a random string using the target host name and port retrieved
-        // from the resolved service
-        // note that the 'remote' socket in this case is actually the local one
-        // we registered when we called `runServiceRegistrationTests()`
-        const auto randomString {juce::Uuid().toString()};
-        expect (sendStringToRemoteSocket<SocketType>(randomString, targetHostName, targetPort));
-
-        // check the data was recieved on the local socket we registered
-        expect (expectStringOnSocket (localSocket, randomString));
+        runServiceResolutionTests (discoveredService, portToRegister);
     }
 
     void runDefaultConstructorTests()
@@ -312,8 +224,8 @@ private:
         runCopyConstructorTests();
         runRecordItemTests();
 
-        runBonjourNetworkTests<juce::DatagramSocket> ("_test._udp");
-        runBonjourNetworkTests<juce::StreamingSocket> ("_test._tcp");
+        runBonjourNetworkTests ("_test._udp");
+        runBonjourNetworkTests ("_test._tcp");
     }
 };
 
