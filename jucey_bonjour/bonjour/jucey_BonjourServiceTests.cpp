@@ -1,6 +1,86 @@
 
 #if JUCEY_UNIT_TESTS
 
+template<typename SocketType>
+bool enableListeningOnSocket (SocketType& socket);
+
+template<>
+bool enableListeningOnSocket (juce::DatagramSocket& socket)
+{
+    return socket.bindToPort (0);
+}
+
+template<>
+bool enableListeningOnSocket (juce::StreamingSocket& socket)
+{
+    return socket.createListener (0);
+}
+
+template <typename SocketType>
+bool sendStringToRemoteSocket (const juce::String& stringToSend,
+                               const juce::String& targetHostName,
+                               int targetPort);
+
+template<>
+bool sendStringToRemoteSocket<juce::DatagramSocket> (const juce::String& stringToSend,
+                                                     const juce::String& targetHostName,
+                                                     int targetPort)
+{
+    juce::DatagramSocket socket;
+
+    if (socket.bindToPort (0))
+    {
+        const auto numBytes {(int) stringToSend.getNumBytesAsUTF8()};
+        return socket.write (targetHostName, targetPort, stringToSend.toRawUTF8(), numBytes) == numBytes;
+    }
+
+    return false;
+}
+
+template<>
+bool sendStringToRemoteSocket<juce::StreamingSocket> (const juce::String& stringToSend,
+                                                      const juce::String& targetHostName,
+                                                      int targetPort)
+{
+    juce::StreamingSocket socket;
+
+    if (socket.connect (targetHostName, targetPort))
+    {
+        const auto numBytes {(int) stringToSend.getNumBytesAsUTF8()};
+        return socket.write (stringToSend.toRawUTF8(), numBytes) == numBytes;
+    }
+
+    return false;
+}
+
+template <typename SocketType>
+bool expectStringOnSocket (SocketType& socket, const juce::String& stringToExpect);
+
+template<>
+bool expectStringOnSocket (juce::DatagramSocket& socket, const juce::String& stringToExpect)
+{
+    juce::MemoryBlock data {stringToExpect.getNumBytesAsUTF8(), true};
+
+    if (socket.read (data.getData(), (int) data.getSize(), true) == (int) data.getSize())
+        return data.toString() == stringToExpect;
+
+    return false;
+}
+
+template<>
+bool expectStringOnSocket (juce::StreamingSocket& socket, const juce::String& stringToExpect)
+{
+    if (const auto listenerSocket = std::unique_ptr<juce::StreamingSocket>(socket.waitForNextConnection()))
+    {
+        juce::MemoryBlock data {stringToExpect.getNumBytesAsUTF8(), true};
+
+        if (listenerSocket->read (data.getData(), (int) data.getSize(), true) == (int) data.getSize())
+            return data.toString() == stringToExpect;
+    }
+
+    return false;
+}
+
 class BonjourServiceTests : private juce::UnitTest
 {
 public:
@@ -16,84 +96,132 @@ public:
     }
 
 private:
-    void runBonjourNetworkTests (const juce::String& type)
+    jucey::BonjourService runServiceRegistrationTests (jucey::BonjourService& serviceToRegister,
+                                                       int portToRegisterServiceOn)
     {
-        beginTest ("Network Test: " + type);
+        jucey::BonjourService registeredService;
+        juce::WaitableEvent onServiceRegisteredEvent;
 
-        jucey::BonjourService serviceToRegister {type};
-        serviceToRegister.withName ("JUCEY Bonjour Service Test");
-        serviceToRegister.withDomain ("local");
-
-        jucey::BonjourService serviceToDiscover {serviceToRegister};
-        jucey::BonjourService serviceToResolve;
-
-        juce::WaitableEvent serviceRegisteredEvent;
-        juce::WaitableEvent serviceDiscoveredEvent;
-        juce::WaitableEvent serviceResolvedEvent;
-
-        const auto serviceResolved = [&](const jucey::BonjourService& service,
-                                         const juce::Result& result)
+        const auto onServiceRegistered = [&](const jucey::BonjourService& service,
+                                             const juce::Result& result)
         {
             expect (result.wasOk());
-            serviceResolvedEvent.signal();
+            expect (service.getName() == serviceToRegister.getName());
+            expect (service.getType() == serviceToRegister.getType());
+            expect (service.getDomain() == serviceToRegister.getDomain());
+
+            for (auto index {0}; index < serviceToRegister.getNumRecordItems(); ++index)
+                expect (service.getRecordItemAtIndex (index) == serviceToRegister.getRecordItemAtIndex (index));
+
+            registeredService = service;
+            onServiceRegisteredEvent.signal();
         };
 
-        const auto serviceDiscovered = [&](const jucey::BonjourService& service,
-                                           bool isAvailable,
-                                           bool isMoreComing,
-                                           const juce::Result& result)
+        // register the service
+        expect (serviceToRegister.registerAsync (onServiceRegistered, portToRegisterServiceOn));
+        expect (onServiceRegisteredEvent.wait (1000));
+
+        return registeredService;
+    }
+
+    jucey::BonjourService runServiceDiscoveryTests (const jucey::BonjourService& expectedService)
+    {
+        jucey::BonjourService serviceToDiscover {expectedService};
+        jucey::BonjourService discoveredService;
+        juce::WaitableEvent onServiceDiscoveredEvent;
+
+        const auto onServiceDiscovered = [&](const jucey::BonjourService& service,
+                                             bool isAvailable,
+                                             bool isMoreComing,
+                                             const juce::Result& result)
         {
             expect (result.wasOk());
             expect (isAvailable);
+            expect (service.getType() == expectedService.getType());
+            expect (service.getName() == expectedService.getName());
+            expect (service.getDomain() == expectedService.getDomain());
 
+            // there shouldn't be any record items until the service is resolved
+            expect (service.getNumRecordItems() == 0);
+
+            // we could be registered on multiple interfaces, just take the
+            // last one to keep things simple
             if ( ! isMoreComing)
             {
-                serviceToResolve = service;
-                serviceDiscoveredEvent.signal();
+                discoveredService = service;
+                onServiceDiscoveredEvent.signal();
             }
         };
 
-        const auto serviceRegistered = [&](const jucey::BonjourService& service,
+        // discover the registered service
+        expect (serviceToDiscover.discoverAsync (onServiceDiscovered));
+        expect (onServiceDiscoveredEvent.wait (-1));
+
+        return discoveredService;
+    }
+
+    void runServiceResolutionTests (const jucey::BonjourService& serviceToResolve,
+                                    juce::String& targetHostName,
+                                    int& targetPort)
+    {
+        jucey::BonjourService resolvedService;
+        juce::WaitableEvent onServiceResolvedEvent;
+
+        const auto onServiceResolved = [&](const jucey::BonjourService& service,
+                                           const juce::String& hostName,
+                                           int port,
                                            const juce::Result& result)
         {
             expect (result.wasOk());
-            serviceRegisteredEvent.signal();
+            expect (result.wasOk());
+            expect (service.getName() == serviceToResolve.getName());
+            expect (service.getType() == serviceToResolve.getType());
+            expect (service.getDomain() == serviceToResolve.getDomain());
+
+            for (auto index {0}; index < serviceToResolve.getNumRecordItems(); ++index)
+                expect (service.getRecordItemAtIndex (index) == serviceToResolve.getRecordItemAtIndex (index));
+
+            targetHostName = hostName;
+            targetPort = port;
+            onServiceResolvedEvent.signal();
         };
 
-        // add some propperties before registering the service
+        jucey::BonjourService serviceToResolveCopy {serviceToResolve};
+        expect (serviceToResolveCopy.resolveAsync (onServiceResolved));
+        expect (onServiceResolvedEvent.wait (1000));
+    }
+
+    template <typename SocketType>
+    void runBonjourNetworkTests (const juce::String& serviceTypeToTest)
+    {
+        beginTest ("Network Test: " + serviceTypeToTest);
+
+        SocketType localSocket;
+        expect (enableListeningOnSocket (localSocket));
+
+        jucey::BonjourService serviceToRegister {serviceTypeToTest};
+        serviceToRegister.withName ("JUCEY Test Service");
+        serviceToRegister.withDomain ("local");
         serviceToRegister.setRecordItemValue ("keyA", "valueA");
         serviceToRegister.setRecordItemValue ("keyB", "valueB");
 
-        // register the service
-        serviceToRegister.registerAsync (serviceRegistered);
-        expect (serviceRegisteredEvent.wait (1000));
+        const auto registeredService (runServiceRegistrationTests (serviceToRegister, localSocket.getBoundPort()));
+        const auto discoveredService (runServiceDiscoveryTests (registeredService));
 
-        // discover the registered service
-        serviceToDiscover.discoverAsync (serviceDiscovered);
-        expect (serviceDiscoveredEvent.wait (1000));
+        juce::String targetHostName {};
+        int targetPort {-1};
+        runServiceResolutionTests (discoveredService, targetHostName, targetPort);
+        expect (localSocket.getBoundPort() == targetPort);
 
-        // the discovered service shouldn't have any properties yet
-        expect (serviceToDiscover.getNumRecordItems() == 0);
+        // send a random string using the target host name and port retrieved
+        // from the resolved service
+        // note that the 'remote' socket in this case is actually the local one
+        // we registered when we called `runServiceRegistrationTests()`
+        const auto randomString {juce::Uuid().toString()};
+        expect (sendStringToRemoteSocket<SocketType>(randomString, targetHostName, targetPort));
 
-        // resolve the discovered service
-        serviceToResolve.resolveAsync (serviceResolved);
-        expect (serviceResolvedEvent.wait (1000));
-
-        // check that the resolved service has the correct properties
-        expect (serviceToResolve.getNumRecordItems() == 2);
-        expect (serviceToResolve.getRecordItemValue ("keyA") == "valueA");
-        expect (serviceToResolve.getRecordItemValue ("keyB") == "valueB");
-
-        // send random data using the resolved service
-        const auto dataSent {juce::Uuid().toString()};
-        const auto dataSize {dataSent.getNumBytesAsUTF8()};
-        const auto dataSizeInt {static_cast<int>(dataSize)};
-        expect (serviceToResolve.write (dataSent.toRawUTF8(), dataSizeInt) == dataSizeInt);
-
-        // check the same data was recieved by the registered service
-        juce::MemoryBlock dataRecieved {dataSize, true};
-        expect (serviceToRegister.read (dataRecieved.getData(), dataSizeInt, true) == dataSizeInt);
-        expect (dataRecieved.toString() == dataSent);
+        // check the data was recieved on the local socket we registered
+        expect (expectStringOnSocket (localSocket, randomString));
     }
 
     void runDefaultConstructorTests()
@@ -184,12 +312,8 @@ private:
         runCopyConstructorTests();
         runRecordItemTests();
 
-        // TODO: Re-enable these tests
-        // These tests are being skipped as they currently require UI
-        // interaction on macOS
-
-        // runBonjourNetworkTests ("_test._udp");
-        // runBonjourNetworkTests ("_test._tcp");
+        runBonjourNetworkTests<juce::DatagramSocket> ("_test._udp");
+        runBonjourNetworkTests<juce::StreamingSocket> ("_test._tcp");
     }
 };
 
