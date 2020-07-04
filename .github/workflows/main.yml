@@ -51,11 +51,11 @@ jobs:
           project: tests/Builds/MacOSX/tests.xcodeproj
           configuration: ${{ matrix.configuration }}
           action: build
-          
-      - name: Run Tests
+
+      - name: Disable firewall
         run: |
           sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off
-          tests_executable="tests/Builds/MacOSX/build/${{ matrix.configuration }}/tests"
-          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add $tests_executable
-          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp $tests_executable
-          $tests_executable
+          sudo /usr/libexec/ApplicationFirewall/socketfilterfw -k
+          
+      - name: Run Tests
+        run: tests/Builds/MacOSX/build/${{ matrix.configuration }}/test
