@@ -43,7 +43,7 @@ private:
 
         // register the service
         expect (serviceToRegister.registerAsync (onServiceRegistered, portToRegisterServiceOn));
-        expect (onServiceRegisteredEvent.wait (1000));
+        expect (onServiceRegisteredEvent.wait (10000));
 
         return registeredService;
     }
@@ -83,7 +83,7 @@ private:
 
         // discover the registered service
         expect (serviceToDiscover.discoverAsync (onServiceDiscovered));
-        expect (onServiceDiscoveredEvent.wait (-1));
+        expect (onServiceDiscoveredEvent.wait (10000));
 
         return discoveredService;
     }
@@ -118,7 +118,7 @@ private:
 
         jucey::BonjourService serviceToResolveCopy {serviceToResolve};
         expect (serviceToResolveCopy.resolveAsync (onServiceResolved));
-        expect (onServiceResolvedEvent.wait (1000));
+        expect (onServiceResolvedEvent.wait (10000));
     }
 
     void runBonjourNetworkTests (const juce::String& serviceTypeToTest)
@@ -219,7 +219,6 @@ private:
         runTcpConstructorTests();
         runCopyConstructorTests();
         runRecordItemTests();
-
         runBonjourNetworkTests ("_test._udp");
         runBonjourNetworkTests ("_test._tcp");
     }
