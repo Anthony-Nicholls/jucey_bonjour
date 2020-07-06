@@ -123,9 +123,7 @@ private:
 
     void runBonjourNetworkTests (const juce::String& serviceTypeToTest)
     {
-        jucey::BonjourService serviceToRegister {serviceTypeToTest};
-        serviceToRegister.withName ("JUCEY Test Service");
-        serviceToRegister.withDomain ("local");
+        jucey::BonjourService serviceToRegister {serviceTypeToTest, "JUCEY Test Service", "local"};
         serviceToRegister.setRecordItemValue ("keyA", "valueA");
         serviceToRegister.setRecordItemValue ("keyB", "valueB");
 
@@ -175,9 +173,7 @@ private:
     void runCopyConstructorTests()
     {
         beginTest ("Copy Constructor");
-        jucey::BonjourService originalService {"_type._tcp"};
-        originalService.withName ("name");
-        originalService.withDomain ("domain");
+        jucey::BonjourService originalService {"_type._tcp", "name", "domain"};
         originalService.setRecordItemValue ("keyA", "valueA");
         originalService.setRecordItemValue ("keyB", "valueB");
 

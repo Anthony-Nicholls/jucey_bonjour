@@ -219,9 +219,7 @@ namespace jucey
         {
             if (auto* serviceToDiscover {static_cast<BonjourService*>(context)})
             {
-                BonjourService discoveredService {regtype};
-                discoveredService.withName (serviceName);
-                discoveredService.withDomain (replyDomain);
+                BonjourService discoveredService {regtype, serviceName, replyDomain};
                 discoveredService.pimpl->interfaceIndex = interfaceIndex;
                 serviceToDiscover->pimpl->discoverAsyncCallback (discoveredService,
                                                                  flags & kDNSServiceFlagsAdd,
@@ -312,8 +310,12 @@ namespace jucey
 
     }
 
-    BonjourService::BonjourService (const juce::String& type)
+    BonjourService::BonjourService (const juce::String& type,
+                                    const juce::String& name,
+                                    const juce::String& domain)
         : type {type}
+        , name {name}
+        , domain {domain}
         , pimpl {std::make_unique<BonjourService::Pimpl>()}
     {
         // bonjour services must always start with an underscore ("_")
@@ -324,8 +326,8 @@ namespace jucey
     }
 
     BonjourService::BonjourService (const BonjourService& other)
-        : name {other.name}
-        , type {other.type}
+        : type {other.type}
+        , name {other.name}
         , domain {other.domain}
         , pimpl {std::make_unique<BonjourService::Pimpl>(*other.pimpl.get())}
     {
@@ -345,18 +347,6 @@ namespace jucey
     BonjourService::~BonjourService()
     {
         
-    }
-
-    BonjourService& BonjourService::withName (const juce::String& newName)
-    {
-        name = newName;
-        return *this;
-    }
-
-    BonjourService& BonjourService::withDomain (const juce::String& newDomain)
-    {
-        domain = newDomain;
-        return *this;
     }
 
     juce::String BonjourService::getName() const

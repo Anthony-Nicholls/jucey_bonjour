@@ -7,12 +7,11 @@ namespace jucey
     {
     public:
         BonjourService();
-        BonjourService (const juce::String& type);
+        BonjourService (const juce::String& type,
+                        const juce::String& name = {},
+                        const juce::String& domain = {});
         BonjourService (const BonjourService& other);
         ~BonjourService();
-
-        BonjourService& withName (const juce::String& newName);
-        BonjourService& withDomain (const juce::String& newDomain);
 
         juce::String getName() const;
         juce::String getType() const;
@@ -59,8 +58,8 @@ namespace jucey
         BonjourService& operator= (const BonjourService& other);
 
     private:
-        juce::String name {};
         juce::String type {};
+        juce::String name {};
         juce::String domain {};
         
         class Pimpl;
