@@ -25,6 +25,7 @@ jobs:
         
       - name: Checkout JUCE
         uses: actions/checkout@v2
+        with:
           repository: juce-framework/JUCE
           ref: ${{ matrix.juce-branch }}
           path: tests/JUCE
@@ -32,14 +33,14 @@ jobs:
       - name: Set JUCE Ref
         id: juce
         run: echo "::set-output name=ref::$(git rev-parse HEAD)"
-          working-directory: tests/JUCE
+        working-directory: tests/JUCE
           
       - name: Retrieve Cached Projucer
         uses: actions/cache@v2
         with: 
           path: tests/JUCE/extras/Projucer/Builds/MacOSX/build/${{ matrix.configuration }}
           key: ${{ runner.os }}-${{ steps.juce.ref }}-${{ matrix.configuration }}-${{ matrix.xcode-version }}
-          
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@1.0
         with:
