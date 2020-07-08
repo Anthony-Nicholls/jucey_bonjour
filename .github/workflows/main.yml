@@ -29,17 +29,17 @@ jobs:
           repository: juce-framework/JUCE
           ref: ${{ matrix.juce-branch }}
           path: tests/JUCE
-      
-      - name: Set JUCE Ref
-        id: juce
-        run: echo "::set-output name=ref::$(git rev-parse HEAD)"
+          
+      - id: get-juce-sha
+        run: "echo ::set-output name=sha::$(git rev-parse)"
         working-directory: tests/JUCE
           
       - name: Retrieve Cached Projucer
+        id: cached-projucer
         uses: actions/cache@v2
         with: 
           path: tests/JUCE/extras/Projucer/Builds/MacOSX/build/${{ matrix.configuration }}
-          key: ${{ runner.os }}-${{ steps.juce.ref }}-${{ matrix.configuration }}-${{ matrix.xcode-version }}
+          key: ${{ runner.os }}-${{ steps.get-juce-sha.outputs.sha }}-${{ matrix.configuration }}-${{ matrix.xcode-version }}
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@1.0
@@ -47,6 +47,7 @@ jobs:
           xcode-version: ${{ matrix.xcode-version }}
 
       - name: Build Projucer
+        if: steps.cached-projucer.outputs.cache-hit != 'true'
         uses: sersoft-gmbh/xcodebuild-action@v1
         with:
           project: tests/JUCE/extras/Projucer/Builds/MacOSX/Projucer.xcodeproj
