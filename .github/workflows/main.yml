@@ -30,12 +30,13 @@ jobs:
           ref: ${{ matrix.juce-branch }}
           path: tests/JUCE
           
-      - id: get-juce-sha
+      - name: Get JUCE SHA
+        id: get-juce-sha
         run: "echo ::set-output name=sha::$(git rev-parse HEAD)"
         working-directory: tests/JUCE
           
       - name: Retrieve Cached Projucer
-        id: cached-projucer
+        id: retrieve-cached-projucer
         uses: actions/cache@v2
         with: 
           path: tests/JUCE/extras/Projucer/Builds/MacOSX/build/${{ matrix.configuration }}
@@ -47,7 +48,7 @@ jobs:
           xcode-version: ${{ matrix.xcode-version }}
 
       - name: Build Projucer
-        if: steps.cached-projucer.outputs.cache-hit != 'true'
+        if: steps.retrieve-cached-projucer.outputs.cache-hit != 'true'
         uses: sersoft-gmbh/xcodebuild-action@v1
         with:
           project: tests/JUCE/extras/Projucer/Builds/MacOSX/Projucer.xcodeproj
