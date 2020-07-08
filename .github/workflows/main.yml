@@ -31,7 +31,7 @@ jobs:
           path: tests/JUCE
           
       - id: get-juce-sha
-        run: "echo ::set-output name=sha::$(git rev-parse)"
+        run: "echo ::set-output name=sha::$(git rev-parse HEAD)"
         working-directory: tests/JUCE
           
       - name: Retrieve Cached Projucer
