@@ -429,7 +429,7 @@ namespace jucey
                                                             &Pimpl::browseReply,
                                                             this))};
 
-        if (result.ok())
+        if (result.wasOk())
             pimpl->startDnsService (ref);
 
         return result;
@@ -449,7 +449,7 @@ namespace jucey
                                                              &Pimpl::resolveReply,
                                                              this))};
 
-        if (result.ok())
+        if (result.wasOk())
             pimpl->startDnsService (ref);
 
         return result;
@@ -478,7 +478,7 @@ namespace jucey
                                                               &Pimpl::registerReply,
                                                               this))};
 
-        if (result.ok())
+        if (result.wasOk())
             pimpl->startDnsService (ref);
 
         return result;
