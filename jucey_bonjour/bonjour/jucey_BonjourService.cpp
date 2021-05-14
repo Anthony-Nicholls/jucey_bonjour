@@ -425,7 +425,7 @@ namespace jucey
                                                             0,
                                                             interfaceIndex,
                                                             type.toUTF8(),
-                                                            domain.isEmpty() ? nullptr : domain.toUTF8(),
+                                                            domain.toUTF8(),
                                                             &Pimpl::browseReply,
                                                             this))};
 
